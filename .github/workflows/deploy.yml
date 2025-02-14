@@ -1,26 +1,47 @@
-name: Deploy to S3
+name: Deploy Flask App to AWS Lambda
 
 on:
   push:
     branches:
-      - main  # Runs when changes are pushed to 'main' branch
+      - main  # Triggers on push to main branch
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
+      - name: Checkout Code
         uses: actions/checkout@v3
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v1
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install Dependencies
+        run: |
+          pip install --target package -r requirements.txt
+          cp app.py package/
+
+      - name: Package Lambda
+        run: |
+          cd package
+          zip -r ../deployment.zip .
+
+      - name: Deploy to AWS Lambda
+        uses: aws-actions/aws-cli-action@v1
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
+          aws-region: ap-south-1
+          command: |
+            aws lambda update-function-code --function-name flask-auth-app --zip-file fileb://deployment.zip
 
-      - name: Deploy HTML files to S3
+      - name: Enable Lambda Function URL
         run: |
-          aws s3 sync app/ s3://web-app-bucket123 --delete
-          
+          aws lambda add-permission \
+            --function-name flask-auth-app \
+            --statement-id function-url \
+            --action lambda:InvokeFunctionUrl \
+            --principal '*' \
+            --region ap-south-1
