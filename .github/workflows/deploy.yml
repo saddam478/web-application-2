@@ -1,13 +1,9 @@
-name: Deploy Flask App to AWS Lambda
+name: Deploy HTML to AWS Lambda
 
 on:
   push:
     branches:
-      - main  # Triggers deployment on push to main branch
-
-permissions:
-  id-token: write
-  contents: read
+      - main
 
 jobs:
   deploy:
@@ -22,61 +18,24 @@ jobs:
         with:
           python-version: '3.9'
 
-      - name: Install AWS CLI
-        run: |
-          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-          unzip awscliv2.zip
-          sudo ./aws/install --update
-          aws --version  # Verify installation
-
-      - name: Install Dependencies & Package Lambda
+      - name: Install Dependencies
         run: |
           mkdir package
-          pip install --target package -r requirements.txt
+          cp -r app package/
           cp app.py package/
+
+      - name: Package Lambda
+        run: |
           cd package
           zip -r ../deployment.zip .
 
-      - name: Update AWS Lambda Function Code
+      - name: Deploy to Lambda
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_REGION: ap-south-1
         run: |
-          FUNCTION_NAME="flask-auth-app"
-          echo "Updating Lambda function code..."
           aws lambda update-function-code \
-            --function-name $FUNCTION_NAME \
+            --function-name flask-auth-app \
             --zip-file fileb://deployment.zip \
             --region $AWS_REGION
-
-      - name: Enable Lambda Function URL (If Not Already Enabled)
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_REGION: ap-south-1
-        run: |
-          if aws lambda get-function-url-config --function-name flask-auth-app --region $AWS_REGION 2>&1 | grep -q "ResourceNotFoundException"; then
-            echo "Enabling Lambda Function URL..."
-            aws lambda create-function-url-config \
-              --function-name flask-auth-app \
-              --auth-type NONE \
-              --region $AWS_REGION
-          else
-            echo "Lambda Function URL already enabled."
-          fi
-
-      - name: Add Public Access Permission to Lambda URL
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_REGION: ap-south-1
-        run: |
-          echo "Adding permission for public access..."
-          aws lambda add-permission \
-            --function-name flask-auth-app \
-            --statement-id function-url-public-access \
-            --action lambda:InvokeFunctionUrl \
-            --principal '*' \
-            --region $AWS_REGION \
-            --condition '{"StringEquals": {"lambda:FunctionUrlAuthType": "NONE"}}'
