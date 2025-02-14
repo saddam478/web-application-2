@@ -3,7 +3,7 @@ name: Deploy Flask App to AWS Lambda
 on:
   push:
     branches:
-      - main  # Triggers on push to main branch
+      - main  # Triggers deployment on push to main branch
 
 jobs:
   deploy:
@@ -18,6 +18,12 @@ jobs:
         with:
           python-version: '3.9'
 
+      - name: Install AWS CLI
+        run: |
+          sudo apt update
+          sudo apt install -y awscli
+          aws --version
+
       - name: Install Dependencies
         run: |
           pip install --target package -r requirements.txt
@@ -29,19 +35,25 @@ jobs:
           zip -r ../deployment.zip .
 
       - name: Deploy to AWS Lambda
-        uses: aws-actions/aws-cli-action@v1
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ap-south-1
-          command: |
-            aws lambda update-function-code --function-name flask-auth-app --zip-file fileb://deployment.zip
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ap-south-1
+        run: |
+          aws lambda update-function-code \
+            --function-name flask-auth-app \
+            --zip-file fileb://deployment.zip \
+            --region $AWS_REGION
 
       - name: Enable Lambda Function URL
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ap-south-1
         run: |
           aws lambda add-permission \
             --function-name flask-auth-app \
             --statement-id function-url \
             --action lambda:InvokeFunctionUrl \
             --principal '*' \
-            --region ap-south-1
+            --region $AWS_REGION
