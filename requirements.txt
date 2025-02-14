@@ -2,4 +2,4 @@ flask
 authlib
 werkzeug
 requests
-aws-lambda-web-adapter
+awslambdaric
